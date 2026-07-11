@@ -23,6 +23,8 @@ if not config.TOKEN:
     print("Please set your bot token in Render environment variables.")
     sys.exit(1)
 
+print(f"🔑 Token loaded: {config.TOKEN[:10]}... (hidden for security)")
+
 # Create Flask app for health checks
 app = Flask(__name__)
 
@@ -36,12 +38,13 @@ def health():
 
 def run_web_server():
     port = int(os.environ.get('PORT', 10000))
+    print(f"🌐 Starting web server on port {port}...")
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
 # Start web server in background thread
 web_thread = threading.Thread(target=run_web_server, daemon=True)
 web_thread.start()
-print(f"🌐 Web server started on port {os.environ.get('PORT', 10000)}")
+print("🌐 Web server thread started")
 
 # Set up bot with proper intents
 intents = discord.Intents.all()
@@ -66,11 +69,15 @@ async def download_image(url):
 
 @bot.event
 async def on_ready():
+    print(f'✅✅✅ BOT IS ONLINE! ✅✅✅')
     print(f'✅ Logged in as {bot.user} (ID: {bot.user.id})')
     print(f'✅ Bot is ready to use!')
     print(f'✅ Prefix: {config.PREFIX}')
     print(f'✅ Whitelist: {config.WHITELIST if config.WHITELIST else "Anyone can use"}')
     print('-' * 50)
+    
+    # Set bot status
+    await bot.change_presence(activity=discord.Game(name=f"{config.PREFIX}help | Nuke Bot"))
 
 @bot.event
 async def on_command(ctx):
@@ -92,6 +99,19 @@ async def on_command_error(ctx, error):
     print(f"Error in command {ctx.command}: {error}")
     traceback.print_exc()
 
+@bot.event
+async def on_connect():
+    print("🔌 Bot connected to Discord!")
+
+@bot.event
+async def on_disconnect():
+    print("🔌 Bot disconnected from Discord!")
+
+@bot.event
+async def on_resumed():
+    print("🔄 Bot resumed connection!")
+
+# ========== ALL COMMANDS ==========
 @bot.command()
 async def rserver(ctx):
     if not is_whitelisted(ctx): return
@@ -760,43 +780,32 @@ async def help(ctx):
 
     await ctx.send(embed=embed)
 
-# Run the bot
+# ========== RUN THE BOT ==========
 if __name__ == "__main__":
-    import time
-    import sys
+    print("🚀 Starting bot...")
     
-    def run_bot():
-        try:
-            bot.run(config.TOKEN)
-        except discord.HTTPException as e:
-            if e.status == 429:  # Rate limited
-                retry_after = e.retry_after if hasattr(e, 'retry_after') else 60
-                print(f"⚠️ Rate limited! Waiting {retry_after} seconds...")
-                time.sleep(retry_after)
-                return True  # Retry
-            else:
-                print(f"❌ HTTP Error: {e}")
-                return False
-        except discord.LoginFailure:
-            print("❌ Error: Invalid Discord token!")
-            print("Please check your DISCORD_TOKEN environment variable.")
-            return False
-        except Exception as e:
-            print(f"❌ Error: {e}")
-            traceback.print_exc()
-            return False
-        return True  # Success
+    # Add a small delay before connecting
+    time.sleep(2)
     
-    # Keep trying forever
-    while True:
-        print("🔄 Starting bot...")
-        success = run_bot()
-        
-        if success:
-            # If bot ran successfully but stopped, wait and restart
-            print("🔄 Bot stopped, restarting in 10 seconds...")
-            time.sleep(10)
-        else:
-            # If there was an error, wait longer before retry
-            print("⏳ Waiting 30 seconds before retry...")
-            time.sleep(30)
+    try:
+        print("🔄 Attempting to connect to Discord...")
+        bot.run(config.TOKEN)
+    except discord.LoginFailure:
+        print("❌ Error: Invalid Discord token!")
+        print("Please check your DISCORD_TOKEN environment variable.")
+        sys.exit(1)
+    except discord.HTTPException as e:
+        print(f"❌ HTTP Error: {e}")
+        if e.status == 429:
+            print("⚠️ Rate limited! Waiting 60 seconds...")
+            time.sleep(60)
+            # Retry
+            try:
+                bot.run(config.TOKEN)
+            except:
+                print("❌ Failed again. Exiting.")
+                sys.exit(1)
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        traceback.print_exc()
+        sys.exit(1)
