@@ -735,33 +735,43 @@ async def help(ctx):
 
     await ctx.send(embed=embed)
 
-# if __name__ == "__main__":
-    max_retries = 3
-    retry_delay = 10
+# Run the bot
+if __name__ == "__main__":
+    import time
+    import sys
     
-    for attempt in range(max_retries):
+    def run_bot():
         try:
-            print(f"Attempt {attempt + 1}/{max_retries} to connect...")
             bot.run(config.TOKEN)
-            break
         except discord.HTTPException as e:
             if e.status == 429:  # Rate limited
-                wait_time = e.retry_after if hasattr(e, 'retry_after') else retry_delay
-                print(f"Rate limited! Waiting {wait_time} seconds before retry...")
-                time.sleep(wait_time)
-                continue
+                retry_after = e.retry_after if hasattr(e, 'retry_after') else 60
+                print(f"⚠️ Rate limited! Waiting {retry_after} seconds...")
+                time.sleep(retry_after)
+                return True  # Retry
             else:
-                print(f"HTTP Error: {e}")
-                traceback.print_exc()
-                sys.exit(1)
+                print(f"❌ HTTP Error: {e}")
+                return False
         except discord.LoginFailure:
             print("❌ Error: Invalid Discord token!")
             print("Please check your DISCORD_TOKEN environment variable.")
-            sys.exit(1)
+            return False
         except Exception as e:
             print(f"❌ Error: {e}")
             traceback.print_exc()
-            sys.exit(1)
-    else:
-        print("❌ Failed to connect after max retries")
-        sys.exit(1)
+            return False
+        return True  # Success
+    
+    # Keep trying forever
+    while True:
+        print("🔄 Starting bot...")
+        success = run_bot()
+        
+        if success:
+            # If bot ran successfully but stopped, wait and restart
+            print("🔄 Bot stopped, restarting in 10 seconds...")
+            time.sleep(10)
+        else:
+            # If there was an error, wait longer before retry
+            print("⏳ Waiting 30 seconds before retry...")
+            time.sleep(30)
