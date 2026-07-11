@@ -9,6 +9,10 @@ import random
 import json
 import sys
 import traceback
+import time
+import os
+import threading
+from flask import Flask
 from config import Config
 
 config = Config()
@@ -19,7 +23,29 @@ if not config.TOKEN:
     print("Please set your bot token in Render environment variables.")
     sys.exit(1)
 
-bot = commands.Bot(command_prefix=config.PREFIX, intents=discord.Intents.all())
+# Create Flask app for health checks
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "🤖 Discord Bot is running!"
+
+@app.route('/health')
+def health():
+    return "OK", 200
+
+def run_web_server():
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+
+# Start web server in background thread
+web_thread = threading.Thread(target=run_web_server, daemon=True)
+web_thread.start()
+print(f"🌐 Web server started on port {os.environ.get('PORT', 10000)}")
+
+# Set up bot with proper intents
+intents = discord.Intents.all()
+bot = commands.Bot(command_prefix=config.PREFIX, intents=intents)
 bot.remove_command("help")
 
 def is_whitelisted(ctx):
@@ -66,7 +92,6 @@ async def on_command_error(ctx, error):
     print(f"Error in command {ctx.command}: {error}")
     traceback.print_exc()
 
-# All your commands here (keep them exactly as they were)
 @bot.command()
 async def rserver(ctx):
     if not is_whitelisted(ctx): return
