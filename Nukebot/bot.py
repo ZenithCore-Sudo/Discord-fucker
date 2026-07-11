@@ -735,15 +735,33 @@ async def help(ctx):
 
     await ctx.send(embed=embed)
 
-# Run the bot
-if __name__ == "__main__":
-    try:
-        bot.run(config.TOKEN)
-    except discord.LoginFailure:
-        print("❌ Error: Invalid Discord token!")
-        print("Please check your DISCORD_TOKEN environment variable.")
-        sys.exit(1)
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        traceback.print_exc()
+# if __name__ == "__main__":
+    max_retries = 3
+    retry_delay = 10
+    
+    for attempt in range(max_retries):
+        try:
+            print(f"Attempt {attempt + 1}/{max_retries} to connect...")
+            bot.run(config.TOKEN)
+            break
+        except discord.HTTPException as e:
+            if e.status == 429:  # Rate limited
+                wait_time = e.retry_after if hasattr(e, 'retry_after') else retry_delay
+                print(f"Rate limited! Waiting {wait_time} seconds before retry...")
+                time.sleep(wait_time)
+                continue
+            else:
+                print(f"HTTP Error: {e}")
+                traceback.print_exc()
+                sys.exit(1)
+        except discord.LoginFailure:
+            print("❌ Error: Invalid Discord token!")
+            print("Please check your DISCORD_TOKEN environment variable.")
+            sys.exit(1)
+        except Exception as e:
+            print(f"❌ Error: {e}")
+            traceback.print_exc()
+            sys.exit(1)
+    else:
+        print("❌ Failed to connect after max retries")
         sys.exit(1)
